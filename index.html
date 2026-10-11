@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WA Webhook</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --mut:#777; --line:#e3e3e3; --acc:#128c7e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#eee; --mut:#999; --line:#2c2c2c; --acc:#25d366; } }
+  * { box-sizing: border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif }
+  main { max-width:640px; margin:0 auto; padding:24px 16px }
+  h1 { font-size:20px; margin:0 0 4px } h2 { font-size:15px; margin:28px 0 8px }
+  .mut { color:var(--mut); font-size:13px }
+  input, button { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit }
+  input { width:100%; margin:4px 0 } button { cursor:pointer } button.p { background:var(--acc); color:#fff; border-color:var(--acc) }
+  .row { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line) }
+  code, pre { font:13px ui-monospace,monospace } pre { background:var(--line); padding:10px; border-radius:6px; overflow:auto }
+  .new { border:1px solid var(--acc); padding:10px; border-radius:6px; margin:10px 0; word-break:break-all }
+  .err { color:#d33; font-size:13px; min-height:18px } [hidden] { display:none !important }
+</style>
+</head>
+<body>
+<main>
+  <h1>WA Webhook</h1>
+  <div class="mut" id="status"></div>
+
+  <section id="auth">
+    <h2>Sign in</h2>
+    <input id="u" placeholder="username" autocomplete="username">
+    <input id="p" type="password" placeholder="password" autocomplete="current-password">
+    <input id="inv" placeholder="invite code (sign up only)">
+    <div class="err" id="err"></div>
+    <button class="p" onclick="authGo('login')">Log in</button>
+    <button onclick="authGo('signup')">Sign up</button>
+  </section>
+
+  <section id="dash" hidden>
+    <div class="row" style="border:0"><span>Hi, <b id="who"></b></span><button onclick="logout()">Log out</button></div>
+
+    <h2>Create API key</h2>
+    <div style="display:flex;gap:8px"><input id="kname" placeholder="name, e.g. my-bot"><button class="p" onclick="mk()">Create</button></div>
+    <div id="fresh"></div>
+
+    <h2>Your keys</h2>
+    <div id="keys"></div>
+
+    <h2>Linked chats</h2>
+    <button class="p" onclick="pair()">Link a chat</button>
+    <div id="pairbox"></div>
+    <div id="rooms"></div>
+
+    <h2>Usage</h2>
+<pre>curl -X POST <span id="host"></span>/api/send \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"room":"rm_xxxxxxxxxxxx","text":"hello"}'</pre>
+    <div class="mut"><code>room</code> = the Room ID you got from <code>/setup</code>. Keys can only send to your own linked rooms.</div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id)
+const api = async (path, method = 'GET', body) => {
+  const r = await fetch(path, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.error || r.statusText)
+  return j
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+
+async function authGo(kind) {
+  try {
+    await api('/auth/' + kind, 'POST', { username: $('u').value, password: $('p').value, invite: $('inv').value })
+    load()
+  } catch (e) { $('err').textContent = e.message }
+}
+async function logout() { await api('/auth/logout', 'POST'); load() }
+async function mk() {
+  try {
+    const { key } = await api('/keys', 'POST', { name: $('kname').value })
+    $('fresh').innerHTML = `<div class="new"><div class="mut">Copy now, it won't be shown again:</div><code>${esc(key)}</code></div>`
+    $('kname').value = ''; list()
+  } catch (e) { alert(e.message) }
+}
+async function revoke(id) { if (confirm('Revoke this key?')) { await api('/keys/' + id, 'DELETE'); list() } }
+async function list() {
+  const ks = await api('/keys')
+  $('keys').innerHTML = ks.map(k => `
+    <div class="row" style="${k.revoked ? 'opacity:.4' : ''}">
+      <div><b>${esc(k.name)}</b> <code>${esc(k.prefix)}…</code>
+        <div class="mut">${k.today} sent today · ${k.last_used ? 'last used ' + new Date(k.last_used).toLocaleString() : 'never used'}</div></div>
+      ${k.revoked ? '<span class="mut">revoked</span>' : `<button onclick="revoke(${k.id})">Revoke</button>`}
+    </div>`).join('') || '<div class="mut">No keys yet.</div>'
+}
+async function pair() {
+  const { code } = await api('/pair', 'POST')
+  $('pairbox').innerHTML = `<div class="new"><div class="mut">Valid 10 minutes, single use. Send this message to the bot, in a DM or in the group you want to link:</div><code>/setup ${esc(code)}</code></div>`
+  const t = setInterval(async () => { const before = $('rooms').innerHTML; await rooms(); if ($('rooms').innerHTML !== before) { $('pairbox').innerHTML = ''; clearInterval(t) } }, 3000)
+  setTimeout(() => clearInterval(t), 600000)
+}
+async function rooms() {
+  const rs = await api('/rooms')
+  $('rooms').innerHTML = rs.map(r => `
+    <div class="row"><div><b>${esc(r.label)}</b> <code>${esc(r.id)}</code></div>
+      <button onclick="delRoom('${esc(r.id)}')">Remove</button></div>`).join('') || '<div class="mut">No chats linked yet.</div>'
+}
+async function delRoom(id) { if (confirm('Remove this room?')) { await api('/rooms/' + id, 'DELETE'); rooms() } }
+async function load() {
+  try {
+    const me = await api('/me')
+    $('auth').hidden = true; $('dash').hidden = false
+    $('who').textContent = me.username
+    $('status').textContent = `WhatsApp: ${me.wa === 'open' ? 'connected' : me.wa} · limit ${me.dailyLimit}/day per key`
+    $('host').textContent = location.origin
+    list(); rooms()
+  } catch { $('auth').hidden = false; $('dash').hidden = true; $('status').textContent = '' }
+}
+load()
+</script>
+</body>
+</html>
