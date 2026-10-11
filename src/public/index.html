@@ -3,25 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e1e1e'/%3E%3Ctext x='32' y='44' font-family='sans-serif' font-size='40' font-weight='700' text-anchor='middle' fill='%234a90e2'%3Ewa%3C/text%3E%3C/svg%3E">
 <title>WA Webhook</title>
-<style>
-  :root { --bg:#fff; --fg:#1a1a1a; --mut:#777; --line:#e3e3e3; --acc:#128c7e; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#eee; --mut:#999; --line:#2c2c2c; --acc:#25d366; } }
-  * { box-sizing: border-box }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif }
-  main { max-width:640px; margin:0 auto; padding:24px 16px }
-  h1 { font-size:20px; margin:0 0 4px } h2 { font-size:15px; margin:28px 0 8px }
-  .mut { color:var(--mut); font-size:13px }
-  input, button { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit }
-  input { width:100%; margin:4px 0 } button { cursor:pointer } button.p { background:var(--acc); color:#fff; border-color:var(--acc) }
-  .row { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line) }
-  code, pre { font:13px ui-monospace,monospace } pre { background:var(--line); padding:10px; border-radius:6px; overflow:auto }
-  .new { border:1px solid var(--acc); padding:10px; border-radius:6px; margin:10px 0; word-break:break-all }
-  .err { color:#d33; font-size:13px; min-height:18px } [hidden] { display:none !important }
-</style>
 </head>
 <body>
+<header><a href="/" class="name">wa webhook;</a></header>
 <main>
+<div class="welcome-box">
   <h1>WA Webhook</h1>
   <div class="mut" id="status"></div>
 
@@ -29,17 +19,17 @@
     <h2>Sign in</h2>
     <input id="u" placeholder="username" autocomplete="username">
     <input id="p" type="password" placeholder="password" autocomplete="current-password">
-    <input id="inv" placeholder="invite code (sign up only)">
+    <input id="inv" placeholder="invite code (sign up only)" style="text-transform:uppercase">
     <div class="err" id="err"></div>
-    <button class="p" onclick="authGo('login')">Log in</button>
-    <button onclick="authGo('signup')">Sign up</button>
+    <div class="actions"><button class="p" onclick="authGo('login')">Log in</button>
+    <button onclick="authGo('signup')">Sign up</button></div>
   </section>
 
   <section id="dash" hidden>
-    <div class="row" style="border:0"><span>Hi, <b id="who"></b></span><button onclick="logout()">Log out</button></div>
+    <div class="row top"><span>Hi, <b id="who"></b> <a id="adminlink" href="/admin.html" hidden>· admin</a></span><button onclick="logout()">Log out</button></div>
 
     <h2>Create API key</h2>
-    <div style="display:flex;gap:8px"><input id="kname" placeholder="name, e.g. my-bot"><button class="p" onclick="mk()">Create</button></div>
+    <div class="inputrow"><input id="kname" placeholder="name, e.g. my-bot"><button class="p" onclick="mk()">Create</button></div>
     <div id="fresh"></div>
 
     <h2>Your keys</h2>
@@ -57,7 +47,9 @@
   -d '{"room":"rm_xxxxxxxxxxxx","text":"hello"}'</pre>
     <div class="mut"><code>room</code> = the Room ID you got from <code>/setup</code>. Keys can only send to your own linked rooms.</div>
   </section>
+</div>
 </main>
+<footer><p>&copy; 2026 alfi; made with 💛</p></footer>
 <script>
 const $ = id => document.getElementById(id)
 const api = async (path, method = 'GET', body) => {
@@ -110,6 +102,7 @@ async function load() {
     const me = await api('/me')
     $('auth').hidden = true; $('dash').hidden = false
     $('who').textContent = me.username
+    $('adminlink').hidden = !me.admin
     $('status').textContent = `WhatsApp: ${me.wa === 'open' ? 'connected' : me.wa} · limit ${me.dailyLimit}/day per key`
     $('host').textContent = location.origin
     list(); rooms()

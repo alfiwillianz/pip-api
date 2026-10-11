@@ -1,0 +1,123 @@
+/* Styled after the tracker app (alfiwillianz.my.id) */
+:root {
+    --bg: #121212;
+    --card: #1e1e1e;
+    --field: #2a2a2a;
+    --line: rgba(255, 255, 255, 0.1);
+    --text: #ffffff;
+    --muted: #888;
+    --blue: #4a90e2;
+    --btn-blue: #2e4661;
+    --btn-blue-hover: #305278;
+    --red: #e06c6c;
+    --glow: 0 0 15px rgba(255, 255, 255, 0.1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+}
+
+header { padding: 48px 0 0; display: flex; justify-content: center; }
+.name { font-size: 24px; font-weight: 700; text-decoration: none; color: #ddd; }
+.name:hover { color: var(--blue); }
+
+main { display: flex; justify-content: center; align-items: flex-start; min-height: 70vh; }
+
+.welcome-box {
+    background: var(--card);
+    padding: 40px 25px;
+    margin: 28px 20px 0;
+    border-radius: 15px;
+    box-shadow: var(--glow);
+    width: 100%;
+    max-width: 800px;
+}
+.welcome-box h1 { margin-top: 0; }
+
+main a { color: var(--blue); text-decoration: none; }
+main a:hover { text-decoration: underline; }
+
+footer { text-align: center; padding: 80px 0; font-size: 0.8em; color: #bbb; }
+
+h2 {
+    margin: 30px 0 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+}
+.mut { color: var(--muted); font-size: 0.9rem; }
+.err { color: var(--red); font-size: 0.9rem; min-height: 20px; }
+[hidden] { display: none !important; }
+
+/* ---------- forms & buttons ---------- */
+input {
+    width: 100%;
+    margin: 4px 0;
+    padding: 11px 12px;
+    background: var(--field);
+    color: var(--text);
+    border: 1px solid #444;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+}
+input::placeholder { color: #aaa; }
+input:focus { outline: none; border-color: var(--blue); }
+
+button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #666;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+button:hover { background-color: #444; }
+button.p { background: var(--btn-blue); }
+button.p:hover { background: var(--btn-blue-hover); }
+.inputrow { display: flex; gap: 10px; align-items: center; }
+.inputrow input { margin: 0; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+/* ---------- lists & cards ---------- */
+.row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--field);
+    border-left: 4px solid var(--blue);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 10px 0;
+    box-shadow: var(--glow);
+}
+.row.top { margin: 0 0 10px; background: none; border: 0; box-shadow: none; padding: 0; }
+.row button { padding: 7px 14px; font-size: 14px; flex-shrink: 0; }
+
+.new {
+    border: 1px solid var(--blue);
+    background: rgba(74, 144, 226, 0.1);
+    padding: 12px 14px;
+    border-radius: 8px;
+    margin: 12px 0;
+    word-break: break-all;
+}
+
+code, pre { font: 13px ui-monospace, monospace; }
+code { color: #e0e0e0; }
+pre { background: var(--field); padding: 12px 14px; border-radius: 8px; overflow: auto; border: 1px solid #444; }

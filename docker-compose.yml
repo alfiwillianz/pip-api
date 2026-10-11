@@ -1,0 +1,16 @@
+services:
+  gateway:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3100}:3000"
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      DAILY_LIMIT: ${DAILY_LIMIT:-100}
+      MIN_GAP_MS: ${MIN_GAP_MS:-2000}
+    volumes:
+      - gateway-data:/data   # data.db + WhatsApp auth/
+
+volumes:
+  gateway-data:

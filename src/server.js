@@ -11,11 +11,12 @@ import pino from 'pino'
 import crypto from 'node:crypto'
 
 const PORT = process.env.PORT || 3000
-const INVITE_CODE = process.env.INVITE_CODE        // friends need this to sign up
+const ADMIN_USER = (process.env.ADMIN_USER || 'admin').toLowerCase()
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD  // bootstrap admin; invite codes are generated at /admin.html
 const DAILY_LIMIT = Number(process.env.DAILY_LIMIT || 100) // messages per key per day
 const MIN_GAP_MS = Number(process.env.MIN_GAP_MS || 2000)  // global gap between sends
 
-if (!INVITE_CODE) throw new Error('Set INVITE_CODE env var')
+if (!ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD env var')
 
 // ---------- DB ----------
 const db = new Database('data.db')
@@ -34,7 +35,10 @@ CREATE TABLE IF NOT EXISTS pairings (
 CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY, user_id INTEGER, jid TEXT, label TEXT, created_at INTEGER,
   UNIQUE (user_id, jid));
+CREATE TABLE IF NOT EXISTS invites (
+  code TEXT PRIMARY KEY, note TEXT, created_at INTEGER, used_by INTEGER, used_at INTEGER);
 `)
+try { db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0') } catch {}
 
 const sha256 = s => crypto.createHash('sha256').update(s).digest('hex')
 const hashPass = (p, salt = crypto.randomBytes(16).toString('hex')) =>
@@ -43,6 +47,14 @@ const checkPass = (p, stored) => {
   const [salt, h] = stored.split(':')
   const a = Buffer.from(h, 'hex'), b = crypto.scryptSync(p, salt, 64)
   return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
+
+// bootstrap/refresh the admin account from env on every start
+{
+  const h = hashPass(ADMIN_PASSWORD)
+  const u = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USER)
+  if (u) db.prepare('UPDATE users SET pass_hash = ?, is_admin = 1 WHERE id = ?').run(h, u.id)
+  else db.prepare('INSERT INTO users (username, pass_hash, created_at, is_admin) VALUES (?,?,?,1)').run(ADMIN_USER, h, Date.now())
 }
 
 // ---------- WhatsApp ----------
@@ -113,10 +125,15 @@ const cookieOpts = { httpOnly: true, sameSite: 'lax', maxAge: 7 * 864e5 }
 function auth(req, res, next) {
   const t = req.cookies.sid
   const row = t && db.prepare(
-    'SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?'
+    'SELECT u.id, u.username, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?'
   ).get(t, Date.now())
   if (!row) return res.status(401).json({ error: 'not logged in' })
   req.user = row
+  next()
+}
+
+function adminOnly(req, res, next) {
+  if (!req.user.is_admin) return res.status(403).json({ error: 'admin only' })
   next()
 }
 
@@ -128,13 +145,21 @@ function login(res, userId) {
 
 app.post('/auth/signup', (req, res) => {
   const { username, password, invite } = req.body || {}
-  if (invite !== INVITE_CODE) return res.status(403).json({ error: 'bad invite code' })
+  const code = String(invite || '').trim().toUpperCase()
+  if (!db.prepare('SELECT 1 FROM invites WHERE code = ? AND used_by IS NULL').get(code))
+    return res.status(403).json({ error: 'bad or used invite code' })
   if (!/^[a-z0-9_]{3,20}$/i.test(username || '') || (password || '').length < 8)
     return res.status(400).json({ error: 'username 3-20 chars, password min 8' })
   try {
-    const r = db.prepare('INSERT INTO users (username, pass_hash, created_at) VALUES (?,?,?)')
-      .run(username.toLowerCase(), hashPass(password), Date.now())
-    login(res, r.lastInsertRowid)
+    // user insert + invite redemption are atomic: a failure leaves the code unused
+    const id = db.transaction(() => {
+      const r = db.prepare('INSERT INTO users (username, pass_hash, created_at) VALUES (?,?,?)')
+        .run(username.toLowerCase(), hashPass(password), Date.now())
+      db.prepare('UPDATE invites SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL')
+        .run(r.lastInsertRowid, Date.now(), code)
+      return r.lastInsertRowid
+    })()
+    login(res, id)
     res.json({ ok: true })
   } catch { res.status(409).json({ error: 'username taken' }) }
 })
@@ -152,7 +177,33 @@ app.post('/auth/logout', (req, res) => {
   res.clearCookie('sid'); res.json({ ok: true })
 })
 
-app.get('/me', auth, (req, res) => res.json({ username: req.user.username, wa: waStatus, dailyLimit: DAILY_LIMIT }))
+app.get('/me', auth, (req, res) => res.json({ username: req.user.username, admin: !!req.user.is_admin, wa: waStatus, dailyLimit: DAILY_LIMIT }))
+
+// ----- admin -----
+app.get('/admin/invites', auth, adminOnly, (req, res) =>
+  res.json(db.prepare(`SELECT i.code, i.note, i.created_at, i.used_at, u.username AS used_by
+    FROM invites i LEFT JOIN users u ON u.id = i.used_by ORDER BY i.created_at DESC`).all()))
+
+app.post('/admin/invites', auth, adminOnly, (req, res) => {
+  const code = crypto.randomBytes(5).toString('hex').toUpperCase()
+  db.prepare('INSERT INTO invites (code, note, created_at) VALUES (?,?,?)')
+    .run(code, String(req.body?.note || '').slice(0, 60), Date.now())
+  res.json({ code })
+})
+
+app.delete('/admin/invites/:code', auth, adminOnly, (req, res) => {
+  db.prepare('DELETE FROM invites WHERE code = ? AND used_by IS NULL').run(req.params.code)
+  res.json({ ok: true })
+})
+
+app.get('/admin/users', auth, adminOnly, (req, res) => {
+  const day = new Date().toISOString().slice(0, 10)
+  res.json(db.prepare(`SELECT u.id, u.username, u.is_admin, u.created_at,
+      (SELECT COUNT(*) FROM keys k WHERE k.user_id = u.id AND k.revoked = 0) AS keys,
+      (SELECT COALESCE(SUM(us.count), 0) FROM usage us JOIN keys k ON k.id = us.key_id
+        WHERE k.user_id = u.id AND us.day = ?) AS today
+    FROM users u ORDER BY u.id`).all(day))
+})
 
 // ----- key management (dashboard) -----
 app.get('/keys', auth, (req, res) => {

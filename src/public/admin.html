@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e1e1e'/%3E%3Ctext x='32' y='44' font-family='sans-serif' font-size='40' font-weight='700' text-anchor='middle' fill='%234a90e2'%3Ewa%3C/text%3E%3C/svg%3E">
+<title>WA Webhook Admin</title>
+</head>
+<body>
+<header><a href="/" class="name">wa webhook;</a></header>
+<main>
+<div class="welcome-box">
+  <h1>Admin</h1>
+  <div class="mut"><a href="/">← user dashboard</a></div>
+
+  <section id="auth">
+    <h2>Admin login</h2>
+    <input id="u" placeholder="username" autocomplete="username">
+    <input id="p" type="password" placeholder="password" autocomplete="current-password">
+    <div class="err" id="err"></div>
+    <button class="p" onclick="go()">Log in</button>
+  </section>
+
+  <section id="dash" hidden>
+    <h2>Invite codes</h2>
+    <div class="inputrow"><input id="note" placeholder="note, e.g. for Bob"><button class="p" onclick="mk()">Generate</button></div>
+    <div id="fresh"></div>
+    <div id="invites"></div>
+
+    <h2>Users</h2>
+    <div id="users"></div>
+  </section>
+</div>
+</main>
+<footer><p>&copy; 2026 alfi; made with 💛</p></footer>
+<script>
+const $ = id => document.getElementById(id)
+const api = async (path, method = 'GET', body) => {
+  const r = await fetch(path, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.error || r.statusText)
+  return j
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+
+async function go() {
+  try {
+    await api('/auth/login', 'POST', { username: $('u').value, password: $('p').value })
+    load()
+  } catch (e) { $('err').textContent = e.message }
+}
+async function mk() {
+  const { code } = await api('/admin/invites', 'POST', { note: $('note').value })
+  $('fresh').innerHTML = `<div class="new"><div class="mut">Single use. Send to your friend:</div><code>${esc(code)}</code></div>`
+  $('note').value = ''; invites()
+}
+async function del(code) { await api('/admin/invites/' + code, 'DELETE'); invites() }
+async function invites() {
+  const is = await api('/admin/invites')
+  $('invites').innerHTML = is.map(i => `
+    <div class="row" style="${i.used_by ? 'opacity:.5' : ''}">
+      <div><code>${esc(i.code)}</code> ${esc(i.note || '')}
+        <div class="mut">${i.used_by ? 'used by ' + esc(i.used_by) + ' · ' + new Date(i.used_at).toLocaleString() : 'unused'}</div></div>
+      ${i.used_by ? '' : `<button onclick="del('${esc(i.code)}')">Delete</button>`}
+    </div>`).join('') || '<div class="mut">No invites yet.</div>'
+}
+async function users() {
+  const us = await api('/admin/users')
+  $('users').innerHTML = us.map(u => `
+    <div class="row"><div><b>${esc(u.username)}</b> ${u.is_admin ? '<span class="mut">admin</span>' : ''}
+      <div class="mut">${u.keys} active keys · ${u.today} sent today · joined ${new Date(u.created_at).toLocaleDateString()}</div></div></div>`).join('')
+}
+async function load() {
+  try {
+    const me = await api('/me')
+    if (!me.admin) throw new Error('not admin')
+    $('auth').hidden = true; $('dash').hidden = false
+    invites(); users()
+  } catch { $('auth').hidden = false; $('dash').hidden = true }
+}
+load()
+</script>
+</body>
+</html>
