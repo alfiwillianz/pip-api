@@ -34,6 +34,7 @@
 
     <h2>Your keys</h2>
     <div id="keys"></div>
+    <div id="revokedcard"></div>
 
     <h2>Linked chats</h2>
     <button class="p" onclick="pair()">Link a chat</button>
@@ -41,7 +42,7 @@
     <div id="rooms"></div>
 
     <h2>Usage</h2>
-<pre>curl -X POST <span id="host"></span>/api/send \
+<pre>curl -X POST <span id="host"></span>/v1/send \
   -H "Authorization: Bearer YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"room":"rm_xxxxxxxxxxxx","text":"hello"}'</pre>
@@ -76,13 +77,17 @@ async function mk() {
 }
 async function revoke(id) { if (confirm('Revoke this key?')) { await api('/keys/' + id, 'DELETE'); list() } }
 async function list() {
-  const ks = await api('/keys')
+  const all = await api('/keys')
+  const ks = all.filter(k => !k.revoked), gone = all.length - ks.length
   $('keys').innerHTML = ks.map(k => `
-    <div class="row" style="${k.revoked ? 'opacity:.4' : ''}">
+    <div class="row">
       <div><b>${esc(k.name)}</b> <code>${esc(k.prefix)}…</code>
         <div class="mut">${k.today} sent today · ${k.last_used ? 'last used ' + new Date(k.last_used).toLocaleString() : 'never used'}</div></div>
-      ${k.revoked ? '<span class="mut">revoked</span>' : `<button onclick="revoke(${k.id})">Revoke</button>`}
-    </div>`).join('') || '<div class="mut">No keys yet.</div>'
+      <button onclick="revoke(${k.id})">Revoke</button>
+    </div>`).join('') || '<div class="mut">No active keys.</div>'
+  $('revokedcard').innerHTML = gone ? `
+    <div class="row revoked"><div><b>Revoked keys</b><div class="mut">${gone} revoked</div></div>
+      <a class="button" href="/revoked.html">View</a></div>` : ''
 }
 async function pair() {
   const { code } = await api('/pair', 'POST')

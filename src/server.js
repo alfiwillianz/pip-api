@@ -247,7 +247,7 @@ app.delete('/rooms/:id', auth, (req, res) => {
 })
 
 // ----- the actual webhook -----
-app.post('/api/send', async (req, res) => {
+app.post('/v1/send', async (req, res) => {
   const m = /^Bearer (.+)$/.exec(req.get('authorization') || '')
   const key = m && db.prepare('SELECT * FROM keys WHERE key_hash = ? AND revoked = 0').get(sha256(m[1]))
   if (!key) return res.status(401).json({ error: 'invalid api key' })

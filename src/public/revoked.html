@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e1e1e'/%3E%3Ctext x='32' y='44' font-family='sans-serif' font-size='40' font-weight='700' text-anchor='middle' fill='%234a90e2'%3Ewa%3C/text%3E%3C/svg%3E">
+<title>Revoked keys</title>
+</head>
+<body>
+<header><a href="/" class="name">wa webhook;</a></header>
+<main>
+<div class="welcome-box">
+  <h1>Revoked keys</h1>
+  <div class="mut"><a href="/">← dashboard</a></div>
+  <div id="keys"></div>
+</div>
+</main>
+<footer><p>&copy; 2026 alfi; made with 💛</p></footer>
+<script>
+const $ = id => document.getElementById(id)
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+fetch('/keys').then(r => r.ok ? r.json() : Promise.reject()).then(all => {
+  const ks = all.filter(k => k.revoked)
+  $('keys').innerHTML = ks.map(k => `
+    <div class="row gone"><div><b>${esc(k.name)}</b> <code>${esc(k.prefix)}…</code>
+      <div class="mut">${k.today} sent today · ${k.last_used ? 'last used ' + new Date(k.last_used).toLocaleString() : 'never used'}</div></div>
+      <span class="mut">revoked</span></div>`).join('') || '<div class="mut">No revoked keys.</div>'
+}).catch(() => { location.href = '/' })
+</script>
+</body>
+</html>
